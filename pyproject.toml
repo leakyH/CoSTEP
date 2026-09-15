@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "costep"
+version = "0.1.0"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = ["torch==2.8.0", "numpy==2.2.6", "pandas==2.3.3"]
+
+[project.scripts]
+costep = "costep.cli:main"
+costep-launch = "costep.launcher:main"
+
+[tool.setuptools.packages.find]
+include = ["costep*"]
+
+[tool.setuptools.package-data]
+costep = ["recipes/*.json", "assets/manifest.json", "assets/japan/*.npy", "assets/japan/*.json", "assets/us_state/*.npy", "assets/us_state/*.json", "assets/us_state/*.csv.gz", "assets/reference_calendars.json", "assets/reference_calendars.npz"]
+
+[tool.setuptools]
+include-package-data = false
+license-files = ["LICENSE", "licenses/*"]

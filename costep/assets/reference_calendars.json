@@ -1,0 +1,219 @@
+{
+  "calendar_file": "reference_calendars.npz",
+  "reporting_ranges": {
+    "train": [
+      0,
+      407
+    ],
+    "validate": [
+      407,
+      472
+    ],
+    "test": [
+      472,
+      539
+    ]
+  },
+  "records": {
+    "L0_s42": {
+      "level": "L0",
+      "seed": 42
+    },
+    "L0_s43": {
+      "level": "L0",
+      "seed": 43
+    },
+    "L0_s44": {
+      "level": "L0",
+      "seed": 44
+    },
+    "L0_s45": {
+      "level": "L0",
+      "seed": 45
+    },
+    "L0_s46": {
+      "level": "L0",
+      "seed": 46
+    },
+    "L0_s47": {
+      "level": "L0",
+      "seed": 47
+    },
+    "L0_s48": {
+      "level": "L0",
+      "seed": 48
+    },
+    "L0_s49": {
+      "level": "L0",
+      "seed": 49
+    },
+    "L0_s50": {
+      "level": "L0",
+      "seed": 50
+    },
+    "L0_s51": {
+      "level": "L0",
+      "seed": 51
+    },
+    "L1_s42": {
+      "level": "L1",
+      "seed": 42
+    },
+    "L1_s43": {
+      "level": "L1",
+      "seed": 43
+    },
+    "L1_s44": {
+      "level": "L1",
+      "seed": 44
+    },
+    "L1_s45": {
+      "level": "L1",
+      "seed": 45
+    },
+    "L1_s46": {
+      "level": "L1",
+      "seed": 46
+    },
+    "L1_s47": {
+      "level": "L1",
+      "seed": 47
+    },
+    "L1_s48": {
+      "level": "L1",
+      "seed": 48
+    },
+    "L1_s49": {
+      "level": "L1",
+      "seed": 49
+    },
+    "L1_s50": {
+      "level": "L1",
+      "seed": 50
+    },
+    "L1_s51": {
+      "level": "L1",
+      "seed": 51
+    },
+    "L2_s42": {
+      "level": "L2",
+      "seed": 42
+    },
+    "L2_s43": {
+      "level": "L2",
+      "seed": 43
+    },
+    "L2_s44": {
+      "level": "L2",
+      "seed": 44
+    },
+    "L2_s45": {
+      "level": "L2",
+      "seed": 45
+    },
+    "L2_s46": {
+      "level": "L2",
+      "seed": 46
+    },
+    "L2_s47": {
+      "level": "L2",
+      "seed": 47
+    },
+    "L2_s48": {
+      "level": "L2",
+      "seed": 48
+    },
+    "L2_s49": {
+      "level": "L2",
+      "seed": 49
+    },
+    "L2_s50": {
+      "level": "L2",
+      "seed": 50
+    },
+    "L2_s51": {
+      "level": "L2",
+      "seed": 51
+    },
+    "L3_s42": {
+      "level": "L3",
+      "seed": 42
+    },
+    "L3_s43": {
+      "level": "L3",
+      "seed": 43
+    },
+    "L3_s44": {
+      "level": "L3",
+      "seed": 44
+    },
+    "L3_s45": {
+      "level": "L3",
+      "seed": 45
+    },
+    "L3_s46": {
+      "level": "L3",
+      "seed": 46
+    },
+    "L3_s47": {
+      "level": "L3",
+      "seed": 47
+    },
+    "L3_s48": {
+      "level": "L3",
+      "seed": 48
+    },
+    "L3_s49": {
+      "level": "L3",
+      "seed": 49
+    },
+    "L3_s50": {
+      "level": "L3",
+      "seed": 50
+    },
+    "L3_s51": {
+      "level": "L3",
+      "seed": 51
+    },
+    "L4_s42": {
+      "level": "L4",
+      "seed": 42
+    },
+    "L4_s43": {
+      "level": "L4",
+      "seed": 43
+    },
+    "L4_s44": {
+      "level": "L4",
+      "seed": 44
+    },
+    "L4_s45": {
+      "level": "L4",
+      "seed": 45
+    },
+    "L4_s46": {
+      "level": "L4",
+      "seed": 46
+    },
+    "L4_s47": {
+      "level": "L4",
+      "seed": 47
+    },
+    "L4_s48": {
+      "level": "L4",
+      "seed": 48
+    },
+    "L4_s49": {
+      "level": "L4",
+      "seed": 49
+    },
+    "L4_s50": {
+      "level": "L4",
+      "seed": 50
+    },
+    "L4_s51": {
+      "level": "L4",
+      "seed": 51
+    }
+  }
+}

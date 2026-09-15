@@ -1,0 +1,71 @@
+{
+  "japan/od.npy": {
+    "shape": [
+      539,
+      47,
+      47,
+      1
+    ],
+    "dtype": "float64"
+  },
+  "japan/node.npy": {
+    "shape": [
+      539,
+      47,
+      7
+    ],
+    "dtype": "float64"
+  },
+  "japan/SIR.npy": {
+    "shape": [
+      539,
+      47,
+      3
+    ],
+    "dtype": "float64"
+  },
+  "japan/y.npy": {
+    "shape": [
+      539,
+      47,
+      1
+    ],
+    "dtype": "float64"
+  },
+  "japan/commute.npy": {
+    "shape": [
+      47,
+      47
+    ],
+    "dtype": "float64"
+  },
+  "us_state/od.npy": {
+    "shape": [
+      750,
+      51,
+      51,
+      1
+    ],
+    "dtype": "float64"
+  },
+  "us_state/commute.npy": {
+    "shape": [
+      51,
+      51
+    ],
+    "dtype": "float64"
+  },
+  "us_state/synthetic_od_start_index.npy": {
+    "shape": [],
+    "dtype": "int64"
+  },
+  "us_state/observations.csv.gz": {
+    "format": "table"
+  },
+  "us_state/table_schema.json": {
+    "format": "schema"
+  },
+  "japan/identity.json": {
+    "format": "schema"
+  }
+}

@@ -1,0 +1,384 @@
+{
+  "schema_version": 1,
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51
+  ],
+  "profiles": {
+    "japan_regular_costep": {
+      "config": {
+        "batch_size": 32,
+        "epochs": 500,
+        "patience": 50,
+        "learning_rate": 0.0001,
+        "weight_decay": 1e-08,
+        "post_epochs": 500,
+        "post_patience": 50,
+        "post_learning_rate": 0.0005,
+        "post_start_epoch": 100,
+        "curriculum": "none",
+        "us_split": "811",
+        "post": true,
+        "consistency": true,
+        "dataset": "japan",
+        "ir": false,
+        "capc_weight": 10,
+        "curve": true
+      },
+      "levels": [
+        "L0"
+      ],
+      "variants": {
+        "full": {
+          "enabled": true,
+          "overrides": {},
+          "stages": [
+            "base",
+            "post"
+          ]
+        }
+      }
+    },
+    "us811_ir_main": {
+      "config": {
+        "batch_size": 32,
+        "epochs": 500,
+        "patience": 50,
+        "learning_rate": 0.0001,
+        "weight_decay": 1e-08,
+        "post_epochs": 500,
+        "post_patience": 50,
+        "post_learning_rate": 0.0005,
+        "post_start_epoch": 100,
+        "curriculum": "none",
+        "us_split": "811",
+        "post": true,
+        "consistency": true,
+        "dataset": "us",
+        "ir": true,
+        "capc_weight": 1000,
+        "curve": true
+      },
+      "levels": [
+        "L0"
+      ],
+      "variants": {
+        "full": {
+          "enabled": true,
+          "overrides": {},
+          "stages": [
+            "base",
+            "post"
+          ]
+        }
+      }
+    },
+    "japan_ablation_consistency_post": {
+      "config": {
+        "batch_size": 32,
+        "epochs": 500,
+        "patience": 50,
+        "learning_rate": 0.0001,
+        "weight_decay": 1e-08,
+        "post_epochs": 500,
+        "post_patience": 50,
+        "post_learning_rate": 0.0005,
+        "post_start_epoch": 100,
+        "curriculum": "none",
+        "us_split": "811",
+        "post": true,
+        "consistency": true,
+        "dataset": "japan",
+        "ir": false,
+        "capc_weight": 10,
+        "curve": true
+      },
+      "levels": [
+        "L0"
+      ],
+      "variants": {
+        "full": {
+          "enabled": true,
+          "overrides": {},
+          "stages": [
+            "base",
+            "post"
+          ],
+          "reuse_profile": "japan_regular_costep"
+        },
+        "no_cons": {
+          "enabled": true,
+          "overrides": {
+            "consistency": false
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        }
+      }
+    },
+    "us811_ablation": {
+      "config": {
+        "batch_size": 32,
+        "epochs": 500,
+        "patience": 50,
+        "learning_rate": 0.0001,
+        "weight_decay": 1e-08,
+        "post_epochs": 500,
+        "post_patience": 50,
+        "post_learning_rate": 0.0005,
+        "post_start_epoch": 100,
+        "curriculum": "none",
+        "us_split": "811",
+        "post": true,
+        "consistency": true,
+        "dataset": "us",
+        "ir": true,
+        "capc_weight": 1000,
+        "curve": true
+      },
+      "levels": [
+        "L0"
+      ],
+      "variants": {
+        "full": {
+          "enabled": true,
+          "overrides": {},
+          "stages": [
+            "base",
+            "post"
+          ],
+          "reuse_profile": "us811_ir_main"
+        },
+        "no_ir": {
+          "enabled": true,
+          "overrides": {
+            "ir": false
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "no_cons": {
+          "enabled": true,
+          "overrides": {
+            "consistency": false
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "no_ir_no_cons": {
+          "enabled": true,
+          "overrides": {
+            "ir": false,
+            "consistency": false
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "no_curve": {
+          "enabled": true,
+          "overrides": {
+            "curve": false,
+            "consistency": true
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "no_curve_no_cons": {
+          "enabled": true,
+          "overrides": {
+            "curve": false,
+            "consistency": false
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "native_norm": {
+          "enabled": false,
+          "overrides": {},
+          "stages": [
+            "base",
+            "post"
+          ],
+          "unavailable_reason": "Not implemented: native/norm model."
+        }
+      }
+    },
+    "japan_ablation_architecture": {
+      "config": {
+        "batch_size": 32,
+        "epochs": 500,
+        "patience": 50,
+        "learning_rate": 0.0001,
+        "weight_decay": 1e-08,
+        "post_epochs": 500,
+        "post_patience": 50,
+        "post_learning_rate": 0.0005,
+        "post_start_epoch": 100,
+        "curriculum": "none",
+        "us_split": "811",
+        "post": true,
+        "consistency": true,
+        "dataset": "japan",
+        "ir": false,
+        "capc_weight": 10,
+        "curve": true
+      },
+      "levels": [
+        "L0"
+      ],
+      "variants": {
+        "nocurve": {
+          "enabled": true,
+          "overrides": {
+            "curve": false,
+            "consistency": true
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "nocurve_neither": {
+          "enabled": true,
+          "overrides": {
+            "curve": false,
+            "consistency": false
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "native": {
+          "enabled": false,
+          "overrides": {},
+          "stages": [
+            "base",
+            "post"
+          ],
+          "unavailable_reason": "Not implemented: native/norm model."
+        }
+      }
+    },
+    "japan_irregular_stockste_extension": {
+      "config": {
+        "batch_size": 32,
+        "epochs": 500,
+        "patience": 50,
+        "learning_rate": 0.0001,
+        "weight_decay": 1e-08,
+        "post_epochs": 500,
+        "post_patience": 50,
+        "post_learning_rate": 0.0005,
+        "post_start_epoch": 100,
+        "curriculum": "none",
+        "us_split": "811",
+        "post": true,
+        "consistency": true,
+        "dataset": "japan_irregular",
+        "ir": true,
+        "capc_weight": 10,
+        "curve": true
+      },
+      "levels": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4"
+      ],
+      "variants": {
+        "costep": {
+          "enabled": true,
+          "overrides": {
+            "ir": false
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "costep_ir": {
+          "enabled": true,
+          "overrides": {
+            "ir": true
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        }
+      }
+    },
+    "japan_irregular_paper": {
+      "config": {
+        "batch_size": 32,
+        "epochs": 500,
+        "patience": 50,
+        "learning_rate": 0.0001,
+        "weight_decay": 1e-08,
+        "post_epochs": 500,
+        "post_patience": 50,
+        "post_learning_rate": 0.0005,
+        "post_start_epoch": 100,
+        "curriculum": "none",
+        "us_split": "811",
+        "post": true,
+        "consistency": true,
+        "dataset": "japan_irregular",
+        "ir": true,
+        "capc_weight": 10,
+        "curve": true
+      },
+      "levels": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4"
+      ],
+      "variants": {
+        "costep": {
+          "enabled": true,
+          "overrides": {
+            "ir": false
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        },
+        "costep_ir": {
+          "enabled": true,
+          "overrides": {
+            "ir": true
+          },
+          "stages": [
+            "base",
+            "post"
+          ]
+        }
+      }
+    }
+  }
+}
