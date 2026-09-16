@@ -15,10 +15,6 @@ from .config import Experiment
 RECIPE_ROOT = Path(__file__).with_name('recipes')
 
 
-def read_json(path):
-    return json.loads(Path(path).read_text())
-
-
 def write_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True,exist_ok=True)
@@ -96,13 +92,13 @@ def check_stage(job, stage, data_root, skip_existing):
     path=Path(job['directory'])/stage
     manifest=stage_manifest(job,stage,data_root)
     if path.exists():
-        valid=(path/'run_manifest.json').is_file() and read_json(path/'run_manifest.json')==manifest
-        valid=valid and (path/'status.json').is_file() and read_json(path/'status.json')['status']=='trained'
+        valid=(path/'run_manifest.json').is_file() and json.loads((path/'run_manifest.json').read_text())==manifest
+        valid=valid and (path/'status.json').is_file() and json.loads((path/'status.json').read_text())['status']=='trained'
         valid=valid and (path/f'{stage}.pt').is_file() and (path/'selection_freeze.json').is_file()
         if skip_existing and valid:
             import torch
             checkpoint=torch.load(path/f'{stage}.pt',map_location='cpu',weights_only=True)
-            freeze=read_json(path/'selection_freeze.json')
+            freeze=json.loads((path/'selection_freeze.json').read_text())
             if checkpoint['stage']==stage and checkpoint['epoch']==freeze['epoch'] and checkpoint['config']==freeze['config']:
                 return False
         raise FileExistsError(f'{path}: conflict, incomplete run, or config mismatch; use a new output root. ')
@@ -146,8 +142,8 @@ def evaluate_stage(job,stage,data_root,skip_existing):
     checkpoint=Path(job['directory'])/stage/f'{stage}.pt'
     out=Path(job['directory'])/(stage+'_evaluation')
     if out.exists():
-        if skip_existing and (out/'evaluation_binding.json').is_file() and read_json(out/'evaluation_binding.json')==stage_manifest(job,stage,data_root):
-            if (out/f'{stage}_predictions.npz').is_file() and (out/'status.json').is_file() and read_json(out/'status.json').get('state')=='COMPLETE':
+        if skip_existing and (out/'evaluation_binding.json').is_file() and json.loads((out/'evaluation_binding.json').read_text())==stage_manifest(job,stage,data_root):
+            if (out/f'{stage}_predictions.npz').is_file() and (out/'status.json').is_file() and json.loads((out/'status.json').read_text()).get('state')=='COMPLETE':
                 return
         raise FileExistsError(out)
     run(Experiment(**dict(job['config'],output=str(out))), 'evaluate', checkpoint,data_root)
@@ -169,7 +165,7 @@ def summarize(jobs,allow_partial=False):
                 group['missing'].append(job['seed']);continue
             binding_path=prediction.parent/'evaluation_binding.json'
             if not binding_path.is_file():raise ValueError(f'Missing evaluation binding: {binding_path}')
-            binding=read_json(binding_path)
+            binding=json.loads((binding_path).read_text())
             if binding!=stage_manifest(job,stage,binding.get('data_root')):
                 raise ValueError(f'Evaluation configuration differs from selected matrix: {binding_path}')
             with np.load(prediction,allow_pickle=False) as arrays:
@@ -209,7 +205,7 @@ def main(argv=None):
     parser.add_argument('--allow-partial',action='store_true')
     parser.add_argument('--save',type=Path)
     args=parser.parse_args(argv)
-    matrix=read_json(args.matrix)
+    matrix=json.loads((args.matrix).read_text())
     if args.action=='list':
         print(json.dumps(matrix,indent=2));return
     if not args.profiles:parser.error('--profiles is required')
