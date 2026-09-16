@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import torch
 
-from .config import Experiment, preset
+from .config import Experiment
 from .data import WindowBuilder
 from .datasets import load_dataset
 from .evaluation import rescore, save_evaluation
@@ -157,7 +157,7 @@ def main(argv=None):
     elif args.checkpoint is not None:
         values = dict(torch.load(args.checkpoint, map_location="cpu", weights_only=True)["config"])
     else:
-        values = asdict(preset(args.dataset or "japan"))
+        values = {}
     for key in Experiment.__dataclass_fields__:
         value = getattr(args, key, None)
         if value is not None:

@@ -169,7 +169,6 @@ class WindowBuilder(object):
                 return (legacy_mode_len, None)
             legacy_test_start = int(legacy_mode_len['train']) + int(legacy_mode_len['validate'])
             discarded_count = int(self.pred_len) - 1
-            boundary_dual_use = False
             pretest_stop = legacy_test_start - discarded_count
             if pretest_stop <= 1:
                 raise ValueError(f'non_test_overlap leaves too few pre-test origins after removing {discarded_count} boundary windows: stop={pretest_stop}')
@@ -233,10 +232,6 @@ class WindowBuilder(object):
         if modify_amount in [None, False, 'origin']:
             return 'norm'
         return modify_amount
-
-    @staticmethod
-    def _cross_origin_stitched_enabled(params: dict) -> bool:
-        return True
 
     @staticmethod
     def _slice_or_pad(values, start: int, stop: int):
@@ -318,12 +313,8 @@ class WindowBuilder(object):
         reporting_mode = params.get('reporting_mode', 'daily')
         selection_metric = params.get('selection_metric', 'legacy_mae')
         needs_reporting_metadata = reporting_mode == 'interval' or params.get('loss') == 'report_mae' or is_report_mae_selection_metric(selection_metric) or bool(params.get('emit_reporting_metrics', False)) or bool(params.get('japan_irregular', False))
-        cross_origin_stitched = self._cross_origin_stitched_enabled(params)
-        stitched_shift = 7
         stitched_extra_len = int(params.get('stitched_extra_len', 7))
-        if cross_origin_stitched and stitched_extra_len <= 0:
-            raise ValueError('stitched_extra_len must be positive for cross_origin_stitched')
-        if cross_origin_stitched and stitched_extra_len != 7:
+        if stitched_extra_len != 7:
             raise ValueError('stitched_extra_len must equal cross_origin_shift so shifted context, targets, and reporting metadata share one origin')
         raw_data_len = int(np.asarray(data['y']).shape[0])
         sample_count = raw_data_len - int(self.obs_len) - int(self.pred_len) + 1
@@ -345,7 +336,7 @@ class WindowBuilder(object):
                     metadata = build_reporting_metadata(view_data['y'], report_mask=view_data.get('report_mask'), reset_indices=tuple(view_data.get('reporting_reset_indices', ())))
                 windows = build_window_reporting_payload(metadata, obs_len=self.obs_len, pred_len=self.pred_len)
             feature_view = build_model_reporting_view(view_data, metadata, reporting_mode=reporting_mode, preserve_regular_node_topology=False)
-            view_feats = self.get_feats(feature_view, cross_origin_stitched=cross_origin_stitched, stitched_extra_len=stitched_extra_len)
+            view_feats = self.get_feats(feature_view, stitched_extra_len=stitched_extra_len)
             return (metadata, windows, view_feats)
         augmentation_mode = params.get('reporting_augmentation', 'native')
         japan_irregular = bool(params.get('japan_irregular', False))
@@ -367,7 +358,7 @@ class WindowBuilder(object):
         stitched_reporting_windows = None
         shifted_reporting_windows = None
         consistency_history_report_mask = None
-        if cross_origin_stitched and reporting_windows is not None:
+        if reporting_windows is not None:
             stitched_reporting_windows = {key: np.array(value, copy=True) for (key, value) in reporting_windows.items()}
             base_origins = np.arange(sample_count, dtype=np.int64) + self.obs_len
             max_consistency_shift = max(7, self.pred_len // 2)
@@ -377,9 +368,7 @@ class WindowBuilder(object):
             shifted_origins = base_origins + 7
             shifted_reporting_windows = build_future_reporting_payload(reporting_metadata, origin_indices=shifted_origins, pred_len=self.pred_len)
         (x_od, x_node, x_SIR, y) = feats
-        if np.prod(x_od[0].shape) > 100000:
-            pass
-        else:
+        if np.prod(x_od[0].shape) <= 100000:
             x_od = np.asarray(x_od)
         x_node = np.asarray(x_node)
         x_SIR = np.asarray(x_SIR)
@@ -402,23 +391,20 @@ class WindowBuilder(object):
             invalid_target = ~overlap_target_valid_mask[pretest_indices]
             selected_targets = y[pretest_indices]
             y[pretest_indices] = np.where(invalid_target, np.nan, selected_targets)
-        stitched_extra_mask = None
-        if cross_origin_stitched:
-            (stitched_context_mask, stitched_extra_mask) = self._build_stitched_masks(sample_count=y.shape[0], raw_data_len=data['y'].shape[0], mode_len=mode_len, mode_indices=mode_indices, extra_len=stitched_extra_len)
-            if overlap_contract is not None:
-                cutoff = int(overlap_contract['legal_information_cutoff_raw'])
-                context_calendar = np.arange(sample_count, dtype=np.int64)[:, None] + np.arange(stitched_context_mask.shape[1], dtype=np.int64)[None, :]
-                stitched_context_mask[pretest_indices] &= context_calendar[pretest_indices] < cutoff
-                extra_available = overlap_target_valid_mask[:, self.pred_len:self.pred_len + stitched_extra_len, ...]
-                stitched_extra_mask &= extra_available
-            x_od = self._apply_time_mask(x_od, stitched_context_mask)
-            x_node = self._apply_time_mask(x_node, stitched_context_mask)
-            x_SIR = self._apply_time_mask(x_SIR, stitched_context_mask)
-            y[:, self.pred_len:self.pred_len + stitched_extra_len, ...] = np.where(stitched_extra_mask, y[:, self.pred_len:self.pred_len + stitched_extra_len, ...], 0)
+        (stitched_context_mask, stitched_extra_mask) = self._build_stitched_masks(sample_count=y.shape[0], raw_data_len=data['y'].shape[0], mode_len=mode_len, mode_indices=mode_indices, extra_len=stitched_extra_len)
+        if overlap_contract is not None:
+            cutoff = int(overlap_contract['legal_information_cutoff_raw'])
+            context_calendar = np.arange(sample_count, dtype=np.int64)[:, None] + np.arange(stitched_context_mask.shape[1], dtype=np.int64)[None, :]
+            stitched_context_mask[pretest_indices] &= context_calendar[pretest_indices] < cutoff
+            extra_available = overlap_target_valid_mask[:, self.pred_len:self.pred_len + stitched_extra_len, ...]
+            stitched_extra_mask &= extra_available
+        x_od = self._apply_time_mask(x_od, stitched_context_mask)
+        x_node = self._apply_time_mask(x_node, stitched_context_mask)
+        x_SIR = self._apply_time_mask(x_SIR, stitched_context_mask)
+        y[:, self.pred_len:self.pred_len + stitched_extra_len, ...] = np.where(stitched_extra_mask, y[:, self.pred_len:self.pred_len + stitched_extra_len, ...], 0)
         train_indices = np.asarray(mode_indices['train'], dtype=np.int64) if mode_indices is not None else np.arange(mode_len['train'], dtype=np.int64)
-        if cross_origin_stitched and len(train_indices):
+        if len(train_indices):
             params['_stitched_train_max_origin'] = int(train_indices.max()) + self.obs_len
-            common_support_shift = None
             params['_stitched_common_support_origin_count'] = int(len(train_indices))
         scaler_split_ratio = params.get('scaler_split_ratio')
         if mode_indices is not None:
@@ -429,7 +415,6 @@ class WindowBuilder(object):
             scaler_total = float(sum(scaler_split_ratio))
             scaler_mode_len = {'train': int(float(scaler_split_ratio[0]) / scaler_total * y.shape[0]), 'validate': int(float(scaler_split_ratio[1]) / scaler_total * y.shape[0])}
             scaler_mode_len['test'] = y.shape[0] - scaler_mode_len['train'] - scaler_mode_len['validate']
-        obs_pred_len = self.obs_len + self.pred_len
         if mode_indices is None:
             print('train: [{}-{}), val: [{}-{}), test: [{}-{})'.format(self.obs_len, mode_len['train'] + self.obs_len, mode_len['train'] + self.obs_len, mode_len['train'] + mode_len['validate'] + self.obs_len, mode_len['train'] + mode_len['validate'] + self.obs_len, mode_len['train'] + mode_len['validate'] + mode_len['test'] + self.obs_len))
         else:
@@ -443,30 +428,17 @@ class WindowBuilder(object):
                     split_ranges.append(f'{mode_name}: [{int(indices[0])}-{int(indices[-1])}]')
             print(f"{params.get('split_mode', 'ratio')} split | " + ', '.join(split_ranges))
         print('scaler fit split:', scaler_mode_len)
-        scaler_fit_time_len = self.obs_len + self.pred_len if cross_origin_stitched else None
+        scaler_fit_time_len = self.obs_len + self.pred_len
+        max_od = self._fit_max_od(x_od, train_indices, scaler_fit_time_len)
         if isinstance(x_od, np.ndarray) or isinstance(x_od, torch.Tensor):
-            max_od = None
-            if max_od is None:
-                max_od = self._fit_max_od(x_od, train_indices, scaler_fit_time_len)
             x_od = x_od / max_od
         elif isinstance(x_od, list):
-            max_od = None
-            if max_od is None:
-                max_od = self._fit_max_od(x_od, train_indices, scaler_fit_time_len)
             data['od'] /= max_od
-            if cross_origin_stitched:
-                for od_window in x_od:
-                    if not np.shares_memory(od_window, data['od']):
-                        od_window /= max_od
+            for od_window in x_od:
+                if not np.shares_memory(od_window, data['od']):
+                    od_window /= max_od
         (node_scalers, x_node) = self._standardize_node_features(x_node, train_indices, fit_time_len=scaler_fit_time_len)
         feat_dict = dict()
-        eval_indices = None
-        if mode_indices is not None:
-            eval_indices = np.concatenate([np.asarray(indices, dtype=np.int64) for (mode_name, indices) in mode_indices.items() if mode_name != 'train' and len(indices) > 0]).astype(np.int64)
-        if isinstance(x_od, np.ndarray) or isinstance(x_od, torch.Tensor):
-            pass
-        elif isinstance(x_od, list):
-            pass
         if isinstance(x_od, np.ndarray) or isinstance(x_od, torch.Tensor):
             feat_dict['x_od'] = torch.from_numpy(x_od).float().to(params['GPU'])
         elif isinstance(x_od, list):
@@ -475,25 +447,23 @@ class WindowBuilder(object):
         feat_dict['x_SIR'] = torch.from_numpy(x_SIR).float().to(params['GPU'])
         y = torch.from_numpy(y).float().to(params['GPU'])
         main_y = y[:, :self.pred_len, ...]
-        train_loss_state_mean = None
         reporting_output = None
         if reporting_windows is not None:
             reporting_output = {'target': main_y, 'origin_index': torch.arange(y.shape[0], device=params['GPU'], dtype=torch.int64) + self.obs_len, **{key: torch.from_numpy(value).to(params['GPU']) for (key, value) in reporting_windows.items()}}
             if overlap_target_valid_mask is not None:
                 reporting_output['target_valid_mask'] = torch.from_numpy(overlap_target_valid_mask[:, :self.pred_len, ...]).to(params['GPU'])
-        if cross_origin_stitched:
-            stitched_output = {'target': y, 'extra_mask': torch.from_numpy(stitched_extra_mask).to(params['GPU']), 'origin_index': torch.arange(y.shape[0], device=params['GPU']) + self.obs_len}
-            if stitched_reporting_windows is not None:
-                stitched_output.update({key: torch.from_numpy(value).to(params['GPU']) for (key, value) in stitched_reporting_windows.items() if key != 'origin_index'})
-                stitched_output.update({f'shifted_{key}': torch.from_numpy(value).to(params['GPU']) for (key, value) in shifted_reporting_windows.items() if key != 'origin_index'})
-                stitched_output['consistency_history_report_mask'] = torch.from_numpy(consistency_history_report_mask).to(params['GPU'])
-                prefix_len = self.pred_len - 7
-                shifted_target_valid_mask = np.concatenate([np.ones((y.shape[0], prefix_len, 1, 1), dtype=bool), stitched_extra_mask], axis=1)
-                if overlap_target_valid_mask is not None:
-                    shifted_target_valid_mask &= overlap_target_valid_mask[:, 7:7 + self.pred_len, ...]
-                stitched_output['shifted_target_valid_mask'] = torch.from_numpy(shifted_target_valid_mask).to(params['GPU'])
+        stitched_output = {'target': y, 'extra_mask': torch.from_numpy(stitched_extra_mask).to(params['GPU']), 'origin_index': torch.arange(y.shape[0], device=params['GPU']) + self.obs_len}
+        if stitched_reporting_windows is not None:
+            stitched_output.update({key: torch.from_numpy(value).to(params['GPU']) for (key, value) in stitched_reporting_windows.items() if key != 'origin_index'})
+            stitched_output.update({f'shifted_{key}': torch.from_numpy(value).to(params['GPU']) for (key, value) in shifted_reporting_windows.items() if key != 'origin_index'})
+            stitched_output['consistency_history_report_mask'] = torch.from_numpy(consistency_history_report_mask).to(params['GPU'])
+            prefix_len = self.pred_len - 7
+            shifted_target_valid_mask = np.concatenate([np.ones((y.shape[0], prefix_len, 1, 1), dtype=bool), stitched_extra_mask], axis=1)
             if overlap_target_valid_mask is not None:
-                stitched_output['target_valid_mask'] = torch.from_numpy(overlap_target_valid_mask).to(params['GPU'])
+                shifted_target_valid_mask &= overlap_target_valid_mask[:, 7:7 + self.pred_len, ...]
+            stitched_output['shifted_target_valid_mask'] = torch.from_numpy(shifted_target_valid_mask).to(params['GPU'])
+        if overlap_target_valid_mask is not None:
+            stitched_output['target_valid_mask'] = torch.from_numpy(overlap_target_valid_mask).to(params['GPU'])
         print('Data split:', mode_len)
         data_loader = dict()
         data_loader['max_od'] = max_od
@@ -508,9 +478,8 @@ class WindowBuilder(object):
             requested_data_loader_modes = set(requested_data_loader_modes)
             data_modes = [mode for mode in data_modes if mode in requested_data_loader_modes]
         for mode in data_modes:
-            mode_output = stitched_output if cross_origin_stitched and mode in ['train', 'adapt_train'] else reporting_output if reporting_output is not None else main_y
-            dataset_mode_indices = mode_indices
-            dataset = ForecastDataset(inputs=feat_dict, output=mode_output, mode=mode, mode_len=mode_len, mode_indices=dataset_mode_indices)
+            mode_output = stitched_output if mode in ['train', 'adapt_train'] else reporting_output if reporting_output is not None else main_y
+            dataset = ForecastDataset(inputs=feat_dict, output=mode_output, mode=mode, mode_len=mode_len, mode_indices=mode_indices)
             output_shape = dataset.output['target'].shape if isinstance(dataset.output, dict) else dataset.output.shape
             print('Data loader', '|', mode, '|', 'input node features:', dataset.inputs['x_node'].shape, '|output:', output_shape)
             if mode in ['train', 'adapt_train']:
@@ -534,10 +503,10 @@ class WindowBuilder(object):
                 contract_path.write_text(json.dumps(contract_payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
         return data_loader
 
-    def get_feats(self, data, *, cross_origin_stitched=False, stitched_extra_len=7):
-        """Construct FullDynamic windows, including the optional SRC context."""
+    def get_feats(self, data, *, stitched_extra_len=7):
+        """Construct FullDynamic windows, including the SRC context."""
         (x_od, x_node, x_SIR, y) = ([], [], [], [])
-        context_extra_len = int(stitched_extra_len) if cross_origin_stitched else 0
+        context_extra_len = int(stitched_extra_len)
         context_len = self.obs_len + self.pred_len + context_extra_len
         target_len = self.pred_len + context_extra_len
         for i in range(self.obs_len, data['od'].shape[0] - self.pred_len + 1):

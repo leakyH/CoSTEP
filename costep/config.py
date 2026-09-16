@@ -5,13 +5,13 @@ from pathlib import Path
 @dataclass(frozen=True)
 class Experiment:
     dataset: str = "japan"
-    ir: bool = False
+    ir: bool | None = None
     curve: bool = True
     consistency: bool = True
     post: bool = True
-    capc_weight: float = 10.0
+    capc_weight: float | None = None
     us_split: str = "811"
-    curriculum: str = "fixed_epoch"
+    curriculum: str = "none"
     level: str = "L0"
     seed: int = 42
     reporting_seed: int = 42
@@ -27,6 +27,12 @@ class Experiment:
     device: str = "cpu"
     output: str = "outputs/run"
     threads: int = 4
+
+    def __post_init__(self):
+        if self.ir is None:
+            object.__setattr__(self, "ir", self.dataset != "japan")
+        if self.capc_weight is None:
+            object.__setattr__(self, "capc_weight", 1000.0 if self.dataset == "us" else 10.0)
 
     def validate(self):
         if self.dataset not in {"japan", "us", "japan_irregular"}:
@@ -96,13 +102,3 @@ class Experiment:
             debug=False,
             release_config=asdict(self),
         )
-
-
-def preset(dataset, **overrides):
-    defaults = dict(dataset=dataset)
-    if dataset == "us":
-        defaults.update(ir=True, capc_weight=100, curriculum="fixed_epoch")
-    elif dataset == "japan_irregular":
-        defaults.update(ir=True, capc_weight=10)
-    defaults.update(overrides)
-    return Experiment(**defaults).validate()
