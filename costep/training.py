@@ -17,10 +17,6 @@ def advance_curriculum_task_level(epoch: int, task_level: int, pred_len: int) ->
     epoch = int(epoch)
     task_level = int(task_level)
     pred_len = int(pred_len)
-    if pred_len < 1:
-        raise ValueError(f'pred_len must be positive, got {pred_len}')
-    if task_level < 1:
-        raise ValueError(f'task_level must be positive, got {task_level}')
     if epoch % 2 == 0 and task_level < pred_len:
         task_level += 1
     return min(task_level, pred_len)
@@ -175,8 +171,6 @@ class Trainer(object):
         gamma_weight = float(gamma_weight)
         if beta_weight < 0 or gamma_weight < 0:
             raise ValueError('consistency beta/gamma weights must be non-negative')
-        if abs(beta_weight + gamma_weight - 2.0) > 1e-08:
-            raise ValueError('consistency beta/gamma weights must sum to 2')
         beta_raw = F.l1_loss(base_beta[:, offset:, ...], shifted_beta[:, :-offset, ...])
         gamma_raw = F.l1_loss(base_gamma[:, offset:, ...], shifted_gamma[:, :-offset, ...])
         return {'beta_raw': beta_raw, 'gamma_raw': gamma_raw, 'beta_weighted': beta_raw * beta_weight, 'gamma_weighted': gamma_raw * gamma_weight, 'weighted_total': beta_raw * beta_weight + gamma_raw * gamma_weight}

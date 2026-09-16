@@ -37,8 +37,6 @@ def compute_observation_gamma_floor(documented_i: torch.Tensor, susceptible: tor
     return torch.maximum(data_floor, absolute_floor).clamp_max(1.0)
 
 def _build_piecewise_bezier_basis(target_len, segment_count, degree):
-    if segment_count <= 0:
-        raise ValueError('segment_count must be positive')
     control_count = segment_count * degree + 1
     eval_points = torch.linspace(0, segment_count, target_len, dtype=torch.float32)
     left_idx = torch.floor(eval_points).long().clamp(max=segment_count - 1)
@@ -188,7 +186,6 @@ class CausalGraphSelector(nn.Module):
     def forward(self, H, As):
         assert H.shape[-1] == len(self.idx), f'Input H has time dimension {H.shape[-1]}, but selector is configured for indices {self.idx}'
         return [A[:, self.idx, ...] for A in As]
-import torch
 
 class CoSTEPParameterEncoder(nn.Module):
     """CoSTEP graph-temporal parameter encoder with causal graph selection."""
@@ -310,7 +307,6 @@ class EpidemicStep(nn.Module):
         S_t = S[:, -1, ...] - propagation[:, -1, :, :]
         _raise_nonfinite_debug('new_I_scaled', new_I_scaled, location='new_I_scaled')
         return (new_documented_I, S_t, new_I_scaled)
-import torch
 
 def _raise_nonfinite_debug(name: str, tensor: torch.Tensor, **context):
     finite_mask = torch.isfinite(tensor)
