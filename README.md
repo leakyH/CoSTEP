@@ -1,5 +1,10 @@
 # CoSTEP / CoSTEP-IR
 
+CoSTEP (Consistency-Constrained Spatiotemporal Epidemic Prediction) is a hybrid
+neural–mechanistic model for regional epidemic forecasting. It combines a graph
+neural encoder and a mechanistic decoder with cross-origin consistency constraints.
+CoSTEP-IR extends it to observations reported as totals over irregular intervals.
+
 ## Install
 
 Python 3.10+.
