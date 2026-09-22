@@ -3,11 +3,12 @@
 CoSTEP is released under the MIT License. Copyright (c) 2026 Shaoyu Huang.
 The source-specific data terms remain separate from the code's MIT license.
 
-- [MepoGNN](https://github.com/deepkashiwa20/MepoGNN): source research code and
-  packaged JAPAN data. The upstream MIT notice is retained in [MepoGNN_LICENSE](MepoGNN_LICENSE).
-- [Graph WaveNet](https://github.com/nnzhan/Graph-WaveNet): portions of the graph
-  convolution and temporal convolution code are adapted from this work. Its
-  notice is retained in [GraphWaveNet_LICENSE](GraphWaveNet_LICENSE).
+- [MepoGNN](https://github.com/deepkashiwa20/MepoGNN): a portion of code and
+  packaged JAPAN data are adapted from this work. The upstream MIT notice is retained in [MepoGNN_LICENSE](MepoGNN_LICENSE).
+- [Graph WaveNet](https://github.com/nnzhan/Graph-WaveNet): a portion of the graph
+  convolution and temporal convolution code in MepoGNN is adapted from this work,
+  and thus our work is built on this work. Its notice is retained in
+  [GraphWaveNet_LICENSE](GraphWaveNet_LICENSE).
 - [GeoDS COVID19USFlows](https://github.com/GeoDS/COVID19USFlows): the published
   mobility dataset used to construct the US flows, aligned to the model's node
   order. Its MIT notice is retained in [COVID19USFlows_LICENSE](COVID19USFlows_LICENSE).
