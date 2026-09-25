@@ -552,16 +552,19 @@ def mode_is_train(mode: str) -> bool:
 
 
 def configure_adaptor_training(model, mode="all_adaptor", profile="finetune"):
-    if mode != "all_adaptor" or profile != "finetune":
-        raise ValueError("CoSTEP uses all_adaptor with latency finetuning")
+    dynamic = getattr(model, 'sir_decoder_variant', 'delay') == 'dynamic'
+    expected_profile = 'freeze' if dynamic else 'finetune'
+    if mode != "all_adaptor" or profile != expected_profile:
+        raise ValueError(f"This decoder requires all_adaptor with {expected_profile}")
     model._base_latency_method = model.latency_method
-    model._post_latency_policy = "finetune"
+    model._post_latency_policy = profile
     model._post_latency_profile = None
     model._post_latency_empirical_to_lognormal = False
     ensure_linear_param_adaptor(model)
     remove_adaptor_latency_state(model)
     for param in model.parameters():
         param.requires_grad = True
-    model._post_latency_empirical_to_lognormal = enable_adaptor_latency_finetune(model)
+    if not dynamic:
+        model._post_latency_empirical_to_lognormal = enable_adaptor_latency_finetune(model)
     trainable = [(name, param) for (name, param) in model.named_parameters() if param.requires_grad]
     return {"mode": mode, "profile": profile, "trainable_params": trainable}

@@ -123,7 +123,7 @@ def main(argv=None):
     parser.add_argument("--data-root", type=Path)
     parser.add_argument("--output")
     parser.add_argument("--device")
-    parser.add_argument("--curve", action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument("--sir-decoder-variant", choices=["delay", "dynamic"])
     parser.add_argument("--ir", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--consistency", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--post", action=argparse.BooleanOptionalAction, default=None)

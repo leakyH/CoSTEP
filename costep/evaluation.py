@@ -4,7 +4,6 @@ from pathlib import Path
 import numpy as np
 
 from .scoring import report_error_metrics
-from .peak import peak_error_metrics
 
 
 def score(prediction, target, metadata):
@@ -31,12 +30,6 @@ def score(prediction, target, metadata):
                       if k.startswith("future_") or k == "origin_index"}
     report = report_error_metrics(prediction, target, reporting_metadata=event_metadata)
     result.update(report)
-    if "dataset_context" in metadata:
-        context = json.loads(str(np.asarray(metadata["dataset_context"]).item()))
-        peak = peak_error_metrics(prediction, target, origin_indices=metadata["origin_index"],
-                                  dataset_context=context, node_ids=metadata.get("node_ids"),
-                                  reporting_metadata=event_metadata)
-        result.update(peak_mae=peak["peak_mae"], peak_status=peak["peak_status"], peak=peak)
     return result
 
 
@@ -60,7 +53,7 @@ def save_evaluation(trainer, loader, checkpoint, output, stage):
 
 def save_predictions(prediction, target, metadata, output, prefix):
     if "dataset_context" not in metadata or "origin_index" not in metadata:
-        raise ValueError("Prediction export requires dataset_context and origin_index for peak scoring")
+        raise ValueError("Prediction export requires dataset_context and origin_index for reproducibility")
     path = Path(output)
     artifact = path / (prefix + "_predictions.npz")
     if artifact.exists():

@@ -309,7 +309,7 @@ class WindowBuilder(object):
         return values[train_indices, fit_time_slice, ..., 0].max()
 
     def get_data_loader(self, data: dict, params: dict):
-        modify_amount = self._normalize_modify_amount_mode('align')
+        modify_amount = self._normalize_modify_amount_mode('norm' if params.get('mepognn_ablation', False) else 'align')
         reporting_mode = params.get('reporting_mode', 'daily')
         selection_metric = params.get('selection_metric', 'legacy_mae')
         needs_reporting_metadata = reporting_mode == 'interval' or params.get('loss') == 'report_mae' or is_report_mae_selection_metric(selection_metric) or bool(params.get('emit_reporting_metrics', False)) or bool(params.get('japan_irregular', False))
@@ -336,7 +336,7 @@ class WindowBuilder(object):
                     metadata = build_reporting_metadata(view_data['y'], report_mask=view_data.get('report_mask'), reset_indices=tuple(view_data.get('reporting_reset_indices', ())))
                 windows = build_window_reporting_payload(metadata, obs_len=self.obs_len, pred_len=self.pred_len)
             feature_view = build_model_reporting_view(view_data, metadata, reporting_mode=reporting_mode, preserve_regular_node_topology=False)
-            view_feats = self.get_feats(feature_view, stitched_extra_len=stitched_extra_len)
+            view_feats = self.get_feats(feature_view, stitched_extra_len=stitched_extra_len, amount_features=not params.get('mepognn_ablation', False))
             return (metadata, windows, view_feats)
         augmentation_mode = params.get('reporting_augmentation', 'native')
         japan_irregular = bool(params.get('japan_irregular', False))
@@ -483,7 +483,7 @@ class WindowBuilder(object):
             output_shape = dataset.output['target'].shape if isinstance(dataset.output, dict) else dataset.output.shape
             print('Data loader', '|', mode, '|', 'input node features:', dataset.inputs['x_node'].shape, '|output:', output_shape)
             if mode in ['train', 'adapt_train']:
-                if mode == 'train':
+                if mode == 'train' and params.get('consistency_method') != 'legacy':
                     sampler = AuditedEpochPermutationSampler(origins=dataset.output['origin_index'], seed=int(params['random_seed']), audit_path=Path(params['output_dir']) / 'stitched_sampler_permutations.jsonl')
                     data_loader[mode] = DataLoader(dataset=dataset, batch_size=params['batch_size'], sampler=sampler)
                 else:
@@ -503,7 +503,7 @@ class WindowBuilder(object):
                 contract_path.write_text(json.dumps(contract_payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
         return data_loader
 
-    def get_feats(self, data, *, stitched_extra_len=7):
+    def get_feats(self, data, *, stitched_extra_len=7, amount_features=True):
         """Construct FullDynamic windows, including the SRC context."""
         (x_od, x_node, x_SIR, y) = ([], [], [], [])
         context_extra_len = int(stitched_extra_len)
@@ -515,7 +515,8 @@ class WindowBuilder(object):
             od_window = self._slice_or_pad(data['od'], window_start, window_stop)
             node_window = self._slice_or_pad(data['node'], window_start, window_stop)
             sir_window = np.concatenate([self._slice_or_pad(data['SIR'], window_start, window_stop), self._slice_or_pad(data.get('sir_documented_y', data['y']), window_start, window_stop)], axis=-1)
-            node_window = self._append_modify_amount_features(node_window, od_window, sir_window)
+            if amount_features:
+                node_window = self._append_modify_amount_features(node_window, od_window, sir_window)
             x_od.append(od_window)
             x_node.append(node_window)
             x_SIR.append(sir_window)

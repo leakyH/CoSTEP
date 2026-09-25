@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from .mechanism import DEFAULT_LATENCY_PROFILE, DEFAULT_LATENCY_SDLOG_MIN, get_latency_profile_config
+from .mechanism import DEFAULT_LATENCY_PROFILE, DEFAULT_LATENCY_SDLOG_MIN, get_latency_profile_config, DynamicEpidemicStep
 
 def apply_gamma_floor(param_g: torch.Tensor, minimum: float | torch.Tensor=0.01, straight_through: bool=False) -> torch.Tensor:
     """Apply the rollout gamma floor, optionally with an identity surrogate gradient."""
@@ -337,8 +337,13 @@ def compute_new_infections_pressure(i, K_all=None, *, od_core=None, pop=None, pa
 
 class CoSTEP(nn.Module):
 
-    def __init__(self, num_nodes, dropout=0.5, in_dim=4, in_len=14, out_len=14, residual_channels=32, dilation_channels=32, skip_channels=256, end_channels=512, kernel_size=2, blocks=2, layers=3, latency_window=None, future_od_period=7, stock_estimator='legacy_daily', curve=True):
+    def __init__(self, num_nodes, dropout=0.5, in_dim=4, in_len=14, out_len=14, residual_channels=32, dilation_channels=32, skip_channels=256, end_channels=512, kernel_size=2, blocks=2, layers=3, latency_window=None, future_od_period=7, stock_estimator='legacy_daily', curve=True, sir_decoder_variant='delay'):
         super(CoSTEP, self).__init__()
+        if sir_decoder_variant not in {'delay', 'dynamic'}:
+            raise ValueError('sir_decoder_variant must be delay or dynamic')
+        if sir_decoder_variant == 'dynamic' and (stock_estimator != 'legacy_daily' or not curve):
+            raise ValueError('dynamic decoder requires daily CoSTEP with curves')
+        self.sir_decoder_variant = sir_decoder_variant
         self.stock_estimator = stock_estimator
         if self.stock_estimator not in {'legacy_daily', 'causal_interval_anchor'}:
             raise ValueError('stock_estimator must be legacy_daily or causal_interval_anchor')
@@ -356,6 +361,11 @@ class CoSTEP(nn.Module):
         self.glm_type = 'FullDynamic'
         self.future_od_method = 'repeat_weekly'
         self.future_od_period = max(1, int(future_od_period))
+        if self.sir_decoder_variant == 'dynamic':
+            self.SIRcell = DynamicEpidemicStep()
+            self.inc_init = nn.Parameter(torch.empty(out_len, in_len))
+            nn.init.normal_(self.inc_init, 1, 0.01)
+            return
         self.SIRcell = EpidemicStep()
         latency_config = get_latency_profile_config(DEFAULT_LATENCY_PROFILE)
         self.latency_meanlog = nn.Parameter(torch.tensor(latency_config['meanlog'], dtype=torch.float32))
@@ -501,8 +511,28 @@ class CoSTEP(nn.Module):
         outputs = torch.stack(outputs_SIR, dim=1)
         return outputs
 
+    def decode_parameters(self, SIR, od, max_od, param_b, param_g, *, apply_adaptor=False, report_mask=None):
+        if self.sir_decoder_variant == 'delay':
+            return self._rollout_full_family(
+                SIR, od, max_od, param_b, param_g,
+                self.get_latency_distribution(apply_adaptor=apply_adaptor), report_mask=report_mask,
+            )
+        expected = self.in_len + self.out_dim
+        if param_b.shape[1] != expected or param_g.shape[1] != expected:
+            raise ValueError('Dynamic decoder requires the complete observation + future parameter trajectory')
+        beta, gamma = param_b[:, -self.out_dim:], param_g[:, -self.out_dim:]
+        mobility = torch.einsum('kl,blnmc->bknmc', torch.softmax(self.inc_init, dim=1), od[:, :self.in_len]).squeeze(-1)
+        # JAPAN FullDynamic research configuration uses OD scale factor 6.
+        mobility = mobility * max_od * 6.0
+        state = SIR[:, -1]
+        predictions = []
+        for horizon in range(self.out_dim):
+            result = self.SIRcell(beta[:, horizon], gamma[:, horizon], mobility[:, horizon], state)
+            state = result[..., 1:]
+            predictions.append(result[..., :1])
+        return torch.stack(predictions, dim=1)
+
     def forward(self, x_node, SIR, od, max_od, only_params=False, apply_adaptor=False, report_mask=None):
-        inverse_norm_infect_detact_latency = self.get_latency_distribution(apply_adaptor=apply_adaptor)
         g = od.squeeze(-1)
         g_t = g.permute(0, 1, 3, 2)
         g_dyn = [g / g.sum(3, True), g_t / g_t.sum(3, True)]
@@ -518,7 +548,7 @@ class CoSTEP(nn.Module):
         param_g = apply_gamma_floor(param_g, minimum=observation_gamma_floor, straight_through=True)
         if only_params:
             return (param_b, param_g, param_n)
-        outputs = self._rollout_full_family(SIR=SIR, od=od, max_od=max_od, param_b=param_b, param_g=param_g, inverse_norm_infect_detact_latency=inverse_norm_infect_detact_latency, report_mask=report_mask)
+        outputs = self.decode_parameters(SIR, od, max_od, param_b, param_g, apply_adaptor=apply_adaptor, report_mask=report_mask)
         self.recorded_beta = param_b
         self.recorded_gamma = param_g
         return outputs

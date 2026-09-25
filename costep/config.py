@@ -27,6 +27,8 @@ class Experiment:
     device: str = "cpu"
     output: str = "outputs/run"
     threads: int = 4
+    sir_decoder_variant: str = "delay"
+    mepognn_ablation: bool = False
 
     def __post_init__(self):
         if self.ir is None:
@@ -35,6 +37,18 @@ class Experiment:
             object.__setattr__(self, "capc_weight", 1000.0 if self.dataset == "us" else 10.0)
 
     def validate(self):
+        if self.mepognn_ablation:
+            expected_decoder = "delay" if self.dataset == "us" else "dynamic"
+            if (self.dataset not in {"japan", "us"} or self.curve
+                    or self.ir != (self.dataset == "us")
+                    or self.sir_decoder_variant != expected_decoder):
+                raise ValueError("MepoGNN ablation requires the bundled dataset-specific configuration")
+        if self.sir_decoder_variant not in {"delay", "dynamic"}:
+            raise ValueError("sir_decoder_variant must be delay or dynamic")
+        if self.sir_decoder_variant == "dynamic" and not self.mepognn_ablation and (
+            self.dataset != "japan" or self.ir or not self.curve
+        ):
+            raise ValueError("dynamic decoder requires JAPAN-Regular CoSTEP with curves")
         if self.dataset not in {"japan", "us", "japan_irregular"}:
             raise ValueError("dataset must be japan, us or japan_irregular")
         if self.us_split != "811":
@@ -61,6 +75,7 @@ class Experiment:
     def parameters(self):
         self.validate()
         irregular = self.dataset == "japan_irregular"
+        native_dynamic = self.mepognn_ablation and self.dataset == "japan"
         return dict(
             GPU=self.device,
             output_dir=str(Path(self.output).resolve()),
@@ -89,11 +104,13 @@ class Experiment:
             learn_rate=self.learning_rate,
             weight_decay=self.weight_decay,
             curve=self.curve,
+            sir_decoder_variant=self.sir_decoder_variant,
+            mepognn_ablation=self.mepognn_ablation,
             consistency_enabled=self.consistency,
-            consistency_method="capc_src",
+            consistency_method="legacy" if native_dynamic else "capc_src",
             consistency_loss_lambda=self.capc_weight if self.consistency else 0.0,
-            stitched_left_loss_weight=1.0 if self.consistency else 0.0,
-            stitched_right_loss_weight=1.0 if self.consistency else 0.0,
+            stitched_left_loss_weight=1.0 if self.consistency and not native_dynamic else 0.0,
+            stitched_right_loss_weight=1.0 if self.consistency and not native_dynamic else 0.0,
             base_full_horizon_training=self.curriculum == "none",
             post_train_epochs=self.post_epochs,
             post_train_patience=self.post_patience,

@@ -49,8 +49,8 @@ def matrix_jobs(matrix, profiles, output, device='cpu', variants=None):
             spec = profile['variants'][variant]
             if spec.get('unavailable_reason'):
                 raise ValueError(f'{name}/{variant}: {spec["unavailable_reason"]}')
-            if set(spec['overrides']) - {'curve','ir','consistency'}:
-                raise ValueError('Variant overrides support curve, ir, and consistency. Other settings belong in config.')
+            if set(spec['overrides']) - {'curve','ir','consistency','sir_decoder_variant','mepognn_ablation','post_start_epoch'}:
+                raise ValueError('Unsupported ablation override; use the bundled recipe fields.')
             stages = spec['stages']
             if not stages or len(set(stages)) != len(stages) or set(stages) - {'base','post'}:
                 raise ValueError('stages must select base and/or post (no-post means base)')
@@ -85,7 +85,7 @@ def stage_manifest(job, stage, data_root):
                 parent_checkpoint=str(Path(job['directory'])/'base'/'base.pt') if stage=='post' else None,
                 selection_protocol=dict(metric='MAE' if job['config']['dataset']=='japan' else 'reportMAE',
                                         direction='min',post_start_epoch=job['config']['post_start_epoch']),
-                metric_profile='report_rate_peak_macro_mae_v2')
+                metric_profile='forecast_and_report_errors_v1')
 
 
 def check_stage(job, stage, data_root, skip_existing):
@@ -182,7 +182,7 @@ def summarize(jobs,allow_partial=False):
         if len(set(g['expected']))!=len(g['expected']):raise ValueError(f'Duplicate runs: {key}')
         if g['missing'] and not allow_partial:raise ValueError(f'Missing seeds for {key}: {g["missing"]}')
         stats={}
-        for metric in ['mae','report_mae','peak_mae']:
+        for metric in ['mae','report_mae']:
             values=[row['metrics'][metric] for row in g['rows'] if isinstance(row['metrics'].get(metric),(int,float))]
             stats[metric]=dict(n=len(values),mean=statistics.mean(values) if values else None,
                               sample_sd=statistics.stdev(values) if len(values)>1 else None)

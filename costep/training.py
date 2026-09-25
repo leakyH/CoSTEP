@@ -31,13 +31,14 @@ class Trainer(object):
         self.training_stage = 'base'
         self.consistency_loss_lambda = float(params['consistency_loss_lambda'])
         self.current_consistency_lambda = self.consistency_loss_lambda
-        self.model = mechanistic_model.CoSTEP(
-            num_nodes=data['node'].shape[1],
-            in_dim=data['node'].shape[-1] + 2 + (2 if params['reporting_mode'] == 'interval' else 0),
-            in_len=params['obs_len'], out_len=params['pred_len'],
-            blocks=params['obs_len'] // 7, layers=3, dropout=0.5,
-            stock_estimator=params['stock_estimator'], curve=params.get('curve', True),
-        ).to(params['GPU'])
+        if params.get('mepognn_ablation', False):
+            from .mepognn_ablation import MepoGNNAblation, USMepoGNNAblation
+            if params['dataset'] == 'US_STATE':
+                self.model = USMepoGNNAblation(data['node'].shape[1], data['node'].shape[-1] + 2).to(params['GPU'])
+            else:
+                self.model = MepoGNNAblation(data['node'].shape[1], data['node'].shape[-1]).to(params['GPU'])
+        else:
+            self.model = self._make_costep(params, data)
         self.train_criterion = self.get_loss()
         self.test_criterion = nn.L1Loss()
         self.optimizer = optim.Adam(
@@ -56,9 +57,22 @@ class Trainer(object):
         self.curriculum_checkpoint_eligible_epoch = None
         self.active_early_stop_patience = None
 
+    @staticmethod
+    def _make_costep(params, data):
+        return mechanistic_model.CoSTEP(
+            num_nodes=data['node'].shape[1],
+            in_dim=data['node'].shape[-1] + 2 + (2 if params['reporting_mode'] == 'interval' else 0),
+            in_len=params['obs_len'], out_len=params['pred_len'],
+            blocks=params['obs_len'] // 7, layers=3, dropout=0.5,
+            stock_estimator=params['stock_estimator'], curve=params.get('curve', True),
+            sir_decoder_variant=params.get('sir_decoder_variant', 'delay'),
+        ).to(params['GPU'])
+
     def _effective_consistency_method(self, mode):
         if not self.params['consistency_enabled']:
             return 'none'
+        if self.params.get('consistency_method') == 'legacy':
+            return 'legacy' if mode in {'train', 'adapt_train'} else 'none'
         if self.training_stage == 'post' and mode != 'train':
             return 'none'
         return 'capc_src'
@@ -265,8 +279,7 @@ class Trainer(object):
         expected_param_length = int(self.params['obs_len']) + int(self.params['pred_len'])
         if param_beta.shape[1] != expected_param_length or param_gamma.shape[1] != expected_param_length:
             raise ValueError(f'stitched beta/gamma must cover obs_len + pred_len dates; expected {expected_param_length}, got beta={param_beta.shape[1]}, gamma={param_gamma.shape[1]}')
-        latency = self.model.get_latency_distribution(apply_adaptor=apply_adaptor)
-        return self.model._rollout_full_family(SIR=x_SIR, od=x_od, max_od=self.max_od, param_b=param_beta, param_g=param_gamma, inverse_norm_infect_detact_latency=latency, report_mask=report_mask)
+        return self.model.decode_parameters(x_SIR, x_od, self.max_od, param_beta, param_gamma, apply_adaptor=apply_adaptor, report_mask=report_mask)
 
     @staticmethod
     def _cross_origin_history_report_mask(target_metadata: dict, *, offset: int, obs_len: int) -> torch.Tensor | None:
@@ -461,12 +474,17 @@ class Trainer(object):
             raise ValueError('Checkpoint data identity mismatch')
         config = dict(checkpoint['config'])
         current = dict(self.params['release_config'])
+        config.setdefault('sir_decoder_variant', 'delay')
+        current.setdefault('sir_decoder_variant', 'delay')
+        config.setdefault('mepognn_ablation', False)
+        current.setdefault('mepognn_ablation', False)
         runtime = {'device', 'output', 'epochs', 'post_epochs', 'patience', 'post_patience', 'post_start_epoch', 'threads', 'post'}
         if {k: v for (k, v) in config.items() if k not in runtime} != {k: v for (k, v) in current.items() if k not in runtime}:
             raise ValueError('Checkpoint scientific configuration mismatch')
         if checkpoint['stage'] == 'post':
             adaptor.ensure_linear_param_adaptor(self.model)
-            adaptor.enable_adaptor_latency_finetune(self.model)
+            if self.model.sir_decoder_variant == 'delay':
+                adaptor.enable_adaptor_latency_finetune(self.model)
         self.model.load_state_dict(checkpoint['state_dict'])
         return checkpoint
 
@@ -480,7 +498,8 @@ class Trainer(object):
         self.training_stage = 'post'
         self.cl = False
         self.task_level = self.params['pred_len']
-        info = adaptor.configure_adaptor_training(self.model, 'all_adaptor', 'finetune')
+        profile = 'freeze' if self.model.sir_decoder_variant == 'dynamic' else 'finetune'
+        info = adaptor.configure_adaptor_training(self.model, 'all_adaptor', profile)
         self.optimizer = optim.Adam([p for (_, p) in info['trainable_params']], lr=self.params['post_train_lr'], weight_decay=self.params['weight_decay'])
         post_loaders = adaptor.build_adaptor_tail_loader(base_data_loader, self.params['batch_size'], evaluation=False, tail_len=10, adapt_val_len=2, pred_len=self.params['pred_len'], min_val_label_len=14, include_short_in_adapt_train=False, embargo_len=0)
         audit = adaptor.build_post_split_audit(post_loaders, obs_len=14, pred_len=14)
@@ -612,6 +631,21 @@ class Trainer(object):
                             batch_stitched_left = 0.0
                             batch_stitched_right = 0.0
                             consistency_method = self._effective_consistency_method(mode)
+                            if consistency_method == 'legacy':
+                                beta_terms, gamma_terms = [], []
+                                base_beta, base_gamma = self.model.recorded_beta, self.model.recorded_gamma
+                                for shift in range(1, self.params['pred_len'] // 2 + 1):
+                                    n = self.params['obs_len']
+                                    b, g, _ = self.model(x_node[:, shift:shift+n].transpose(1, 3), x_SIR[:, shift:shift+n], x_od_device[:, shift:shift+n], self.max_od, only_params=True, apply_adaptor=apply_adaptor)
+                                    beta_terms.append(F.l1_loss(base_beta[:, shift:], b[:, :-shift]))
+                                    gamma_terms.append(F.l1_loss(base_gamma[:, shift:], g[:, :-shift]))
+                                beta_loss, gamma_loss = torch.stack(beta_terms).sum(), torch.stack(gamma_terms).sum()
+                                batch_raw_consistency_beta, batch_raw_consistency_gamma = beta_loss.item(), gamma_loss.item()
+                                batch_raw_consistency = batch_raw_consistency_beta + batch_raw_consistency_gamma
+                                batch_scaled_consistency_beta = batch_raw_consistency_beta * self.consistency_loss_lambda
+                                batch_scaled_consistency_gamma = batch_raw_consistency_gamma * self.consistency_loss_lambda
+                                batch_consistency = (beta_loss + gamma_loss) * self.consistency_loss_lambda
+                                loss = loss + batch_consistency
                             if consistency_method in {'capc_src'}:
                                 cross_origin_bundle = self._cross_origin_forward_loss_bundle(mode=mode, consistency_method=consistency_method, x_node=x_node, x_SIR=x_SIR, x_od_device=x_od_device, y_true=y_true, target_metadata=target_metadata, apply_adaptor=apply_adaptor)
                                 self._append_stitched_common_support_audit(epoch=epoch, batch_index=batch_index, main_loss_tensor=train_loss_tensor, bundle=cross_origin_bundle, target_metadata=target_metadata)
